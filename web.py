@@ -9,8 +9,8 @@ def start():
 
 @app.route('/status')
 def status():
-    i = app.daemon.sync_call("status")
-    return {"id": i} 
+    s = app.daemon.sync_call("status")
+    return s
 
 @app.route('/time')
 def time():
