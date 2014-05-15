@@ -1,17 +1,39 @@
-import web
+from collections import defaultdict
 from threading import Thread
 from Queue import Queue
-
 import time
-    
+
+import web
+class State:
+    def __init__(self):
+        self.store = {}
+
+    def set(self, key, value):
+        self.store[key] = value
+
+    def get(self, key):
+        return self.store.get(key)
+
+class Logs:
+    def __init__(self):
+        self.store = defaultdict(list)
+
+    def append(self, id, stream, txt):
+        self.store[id].append((stream, txt))
+
+    def get(self, id):
+        return self.store.get(id)
 
 class Daemon:
-    def __init__(self):
+    def __init__(self, state, logs):
+        self.state = state
+        self.logs = logs
         self.cq = Queue()
         self.rq = Queue()
 
         self.results = {}
         self.threads = {}
+        self.init()
 
     def run(self):
         t = Thread(target=self._bg)
@@ -23,19 +45,9 @@ class Daemon:
     def _bg(self):
         while True:
             self._time = time.ctime()
-            self._status = {"hosts": [
-                {"name": "node-1", "status":"up"},
-                {"name": "node-2", "status":"up"},
-            ]}
             time.sleep(5)
 
     def _run(self):
-        CMDS = {
-            "start": self.start,
-            "status": self.status,
-            "time": self.time,
-        }
-
         id_gen = iter(range(10000000)).next
         while True:
             (cmd, args) = self.cq.get()
@@ -44,6 +56,21 @@ class Daemon:
                 id, result = args
                 print "Got result id=%r result=%r" % (id, result)
                 self.results[id] = result
+                continue
+            if cmd == "setstate":
+                key, value = args
+                print "Got state key=%r value=%r" % (key, value)
+                self.state.set(key, value)
+                continue
+            if cmd == "getstate":
+                key, = args
+                print "Get state key=%r" % (key)
+                self.rq.put(self.state.get(key))
+                continue
+            if cmd in ("out", "err"):
+                id, txt = args
+                print "Got %s id=%r result=%r" % (cmd, id, txt)
+                self.logs.append(id, cmd, txt)
                 continue
             elif cmd == "getresult":
                 id, = args
@@ -54,8 +81,14 @@ class Daemon:
                 print "sending result=%r for id=%r" % (result, id)
                 self.rq.put(result)
                 continue
+            elif cmd == "getlog":
+                id, = args
+                result = self.logs.get(id)
+                print "sending result=%r for id=%r" % (result, id)
+                self.rq.put(result)
+                continue
 
-            func = CMDS.get(cmd, self.noop)
+            func = getattr(self, 'do_' + cmd, self.noop)
             
             t_id = id_gen()
             self.rq.put(t_id)
@@ -66,11 +99,26 @@ class Daemon:
             print "started thread for id=%r func=%r args=%r" % (t_id, func, args)
 
     def wrap(self, id, func, args):
-        res = func(*args)
+        def state(key, value):
+            self.cq.put(("setstate", (key, value)))
+        def out(txt):
+            self.cq.put(("out", (id, txt)))
+        def err(txt):
+            self.cq.put(("err", (id, txt)))
+
+        res = func(state, out, err, *args)
         self.cq.put(("result", (id, res)))
 
     def getresult(self, id):
         self.cq.put(("getresult", [id]))
+        return self.rq.get()
+
+    def getstate(self, key):
+        self.cq.put(("getstate", [key]))
+        return self.rq.get()
+
+    def getlog(self, id):
+        self.cq.put(("getlog", [id]))
         return self.rq.get()
 
     def call(self, func, *args):
@@ -78,6 +126,9 @@ class Daemon:
         return self.rq.get()
 
     def sync_call(self, func, *args):
+        func = getattr(self, 'do_' + func, self.noop)
+        return func(*args)
+        # bad?
         id = self.call(func, *args)
         t = self.threads.get(id) #is this safe?
         if t:
@@ -92,19 +143,35 @@ class Daemon:
     def noop(status, *args):
         return "noop"
 
-    def start(self, *args):
-        time.sleep(4)
-        return self._status
+NODES = 8
+class Broctld(Daemon):
 
-    def status(self, *args):
-        return self._status
+    def init(self):
+        self._status = {}
 
-    def time(self, *args):
+    def do_start(self, state, out, err, *args):
+        time.sleep(1)
+        for x in range(NODES):
+            out("Starting node %d" % x)
+            state("node-%d.status" % x, "up")
+            time.sleep(1)
+        return True
+
+    def do_status(self, *args):
+        nodes = {}
+        for x in range(NODES):
+            nodes["node-%d" % x] = self.getstate("node-%d.status" % x)
+        return nodes
+
+    def do_time(self, *args):
         return self._time
 
 def main():
 
-    d = Daemon()
+    state = State()
+    logs = Logs()
+
+    d = Broctld(state, logs)
     dt = d.run()
 
     ww = Thread(target=web.run_app, args=[d])

@@ -21,6 +21,11 @@ def result(id):
     id = int(id)
     return app.daemon.getresult(id)
 
+@app.route('/log/:id')
+def result(id):
+    id = int(id)
+    return {"log": app.daemon.getlog(id)}
+
 def run_app(daemon):
     app.daemon = daemon
-    run(app, host='localhost', port=8081)
+    run(app, host='localhost', port=8082)
