@@ -17,12 +17,16 @@ class State:
 class Logs:
     def __init__(self):
         self.store = defaultdict(list)
+        self.ids = defaultdict(int)
 
     def append(self, id, stream, txt):
-        self.store[id].append((stream, txt))
+        self.ids[id] += 1
+        msg_id = self.ids[id]
+        self.store[id].append((msg_id, stream, txt))
 
-    def get(self, id):
-        return self.store.get(id)
+    def get(self, id, since=0):
+        msgs = self.store.get(id) or []
+        return [m for m in msgs if m[0] > since]
 
 class Daemon:
     def __init__(self, state, logs):
@@ -82,8 +86,8 @@ class Daemon:
                 self.rq.put(result)
                 continue
             elif cmd == "getlog":
-                id, = args
-                result = self.logs.get(id)
+                id, since = args
+                result = self.logs.get(id, since)
                 print "sending result=%r for id=%r" % (result, id)
                 self.rq.put(result)
                 continue
@@ -117,8 +121,8 @@ class Daemon:
         self.cq.put(("getstate", [key]))
         return self.rq.get()
 
-    def getlog(self, id):
-        self.cq.put(("getlog", [id]))
+    def getlog(self, id, since=0):
+        self.cq.put(("getlog", [id, since]))
         return self.rq.get()
 
     def call(self, func, *args):
@@ -154,7 +158,14 @@ class Broctld(Daemon):
         for x in range(NODES):
             out("Starting node %d" % x)
             state("node-%d.status" % x, "up")
-            time.sleep(1)
+            time.sleep(.5)
+        return True
+
+    def do_stop(self, state, out, err, *args):
+        for x in range(NODES):
+            out("Stopping node %d" % x)
+            state("node-%d.status" % x, "stopped")
+            time.sleep(.1)
         return True
 
     def do_status(self, *args):

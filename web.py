@@ -7,6 +7,11 @@ def start():
     i = app.daemon.call("start")
     return {"id": i} 
 
+@app.route('/stop')
+def start():
+    i = app.daemon.call("stop")
+    return {"id": i} 
+
 @app.route('/status')
 def status():
     s = app.daemon.sync_call("status")
@@ -19,12 +24,14 @@ def time():
 @app.route('/result/:id')
 def result(id):
     id = int(id)
-    return app.daemon.getresult(id)
+    return {"result": app.daemon.getresult(id)}
 
 @app.route('/log/:id')
-def result(id):
+@app.route('/log/:id/:since')
+def result(id, since=0):
     id = int(id)
-    return {"log": app.daemon.getlog(id)}
+    since = int(since)
+    return {"log": app.daemon.getlog(id, since) or []}
 
 def run_app(daemon):
     app.daemon = daemon
