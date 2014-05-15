@@ -49,6 +49,7 @@ class Daemon:
     def _bg(self):
         while True:
             self._time = time.ctime()
+            #self.call('start')
             time.sleep(5)
 
     def handle_result(self, id, result):
@@ -146,9 +147,13 @@ class Broctld(Daemon):
     def do_start(self, state, out, err, *args):
         time.sleep(1)
         for x in range(NODES):
-            out("Starting node %d" % x)
-            state("node-%d.status" % x, "up")
-            time.sleep(.5)
+            res = self.getstate("node-%d.status" % x)
+            if res == 'up':
+                err("Node %d already running" % x)
+            else:
+                out("Starting node %d" % x)
+                state("node-%d.status" % x, "up")
+                time.sleep(.5)
         return True
 
     def do_stop(self, state, out, err, *args):
