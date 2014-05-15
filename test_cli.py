@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+import sys
+import requests
+import time
+import pprint
+
+def log(id, last):
+    res = requests.get("http://localhost:8082/log/%d/%d" % (id, last)).json()
+    if not res['log']:
+        sys.stdout.write("waiting...\r")
+        sys.stdout.flush()
+        return last
+
+    for rec in res['log']:
+        print ' '.join(rec[1:])
+    return rec[0]
+
+def wait(id):
+    print "Waiting for job %d to finish" % id
+    last = 0
+    while True:
+        res = requests.get("http://localhost:8082/result/%d" % id).json()
+        last = log(id, last)
+        if res['result']:
+            return
+        time.sleep(.2)
+
+
+def run(action):
+    res = requests.get("http://localhost:8082/%s" % action).json()
+    wait(res['id'])
+
+def call(action):
+    res = requests.get("http://localhost:8082/%s" % action).json()
+    return res
+
+if __name__ == "__main__":
+    pprint.pprint(call("status"))
+    run(sys.argv[1])
+    pprint.pprint(call("status"))
