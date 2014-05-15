@@ -35,6 +35,8 @@ def call(action):
     return res
 
 if __name__ == "__main__":
-    pprint.pprint(call("status"))
-    run(sys.argv[1])
-    pprint.pprint(call("status"))
+    if sys.argv[1] == 'status':
+        pprint.pprint(call("status"))
+    else:
+        run(sys.argv[1])
+        pprint.pprint(call("status"))

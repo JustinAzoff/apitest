@@ -51,45 +51,46 @@ class Daemon:
             self._time = time.ctime()
             time.sleep(5)
 
+    def handle_result(self, id, result):
+        print "Got result id=%r result=%r" % (id, result)
+        self.results[id] = result
+
+    def handle_setstate(self, key, value):
+        print "Got state key=%r value=%r" % (key, value)
+        self.state.set(key, value)
+
+    def handle_getstate(self, key):
+        print "Get state key=%r" % (key)
+        self.rq.put(self.state.get(key))
+
+    def handle_out(self, id, txt):
+        print "Got %s id=%r result=%r" % ('out', id, txt)
+        self.logs.append(id, 'out', txt)
+
+    def handle_err(self, id, txt):
+        print "Got %s id=%r result=%r" % ('err', id, txt)
+        self.logs.append(id, 'err', txt)
+
+    def handle_getresult(self, id):
+        result = self.results.get(id)
+        if result:
+            del self.results[id]
+            del self.threads[id]
+        print "sending result=%r for id=%r" % (result, id)
+        self.rq.put(result)
+
+    def handle_getlog(self, id, since):
+        result = self.logs.get(id, since)
+        print "sending result=%r for id=%r" % (result, id)
+        self.rq.put(result)
+
     def _run(self):
         id_gen = iter(range(10000000)).next
         while True:
             (cmd, args) = self.cq.get()
-
-            if cmd == "result":
-                id, result = args
-                print "Got result id=%r result=%r" % (id, result)
-                self.results[id] = result
-                continue
-            if cmd == "setstate":
-                key, value = args
-                print "Got state key=%r value=%r" % (key, value)
-                self.state.set(key, value)
-                continue
-            if cmd == "getstate":
-                key, = args
-                print "Get state key=%r" % (key)
-                self.rq.put(self.state.get(key))
-                continue
-            if cmd in ("out", "err"):
-                id, txt = args
-                print "Got %s id=%r result=%r" % (cmd, id, txt)
-                self.logs.append(id, cmd, txt)
-                continue
-            elif cmd == "getresult":
-                id, = args
-                result = self.results.get(id)
-                if result:
-                    del self.results[id]
-                    del self.threads[id]
-                print "sending result=%r for id=%r" % (result, id)
-                self.rq.put(result)
-                continue
-            elif cmd == "getlog":
-                id, since = args
-                result = self.logs.get(id, since)
-                print "sending result=%r for id=%r" % (result, id)
-                self.rq.put(result)
+            func = getattr(self, 'handle_' + cmd, None)
+            if func:
+                func(*args)
                 continue
 
             func = getattr(self, 'do_' + cmd, self.noop)
@@ -132,19 +133,8 @@ class Daemon:
     def sync_call(self, func, *args):
         func = getattr(self, 'do_' + func, self.noop)
         return func(*args)
-        # bad?
-        id = self.call(func, *args)
-        t = self.threads.get(id) #is this safe?
-        if t:
-            t.join()
-        while True:
-            r = self.getresult(id)
-            if r is not None:
-                break
-            time.sleep(.05)
-        return r
 
-    def noop(status, *args):
+    def noop(self, *args):
         return "noop"
 
 NODES = 8
