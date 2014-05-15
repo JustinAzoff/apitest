@@ -138,7 +138,7 @@ class Daemon:
     def noop(self, *args):
         return "noop"
 
-NODES = 8
+NODES = 48
 class Broctld(Daemon):
 
     def init(self):
@@ -153,14 +153,14 @@ class Broctld(Daemon):
             else:
                 out("Starting node %d" % x)
                 state("node-%d.status" % x, "up")
-                time.sleep(.5)
+                time.sleep(.05)
         return True
 
     def do_stop(self, state, out, err, *args):
         for x in range(NODES):
             out("Stopping node %d" % x)
             state("node-%d.status" % x, "stopped")
-            time.sleep(.1)
+            time.sleep(.01)
         return True
 
     def do_status(self, *args):
