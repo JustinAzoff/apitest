@@ -161,7 +161,10 @@ class Daemon(Common):
             w = self.worker_class(id)
             func = getattr(w, cmd, w.noop)
             if hasattr(func, 'api_exposed'):
-                res = func(*args)
+                try :
+                    res = func(*args)
+                except Exception, e:
+                    res = repr(e)
             else:
                 res = "invalid function"
             w.cl.call("result", id, res)
