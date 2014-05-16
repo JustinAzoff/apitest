@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from threading import Thread
+from threading import Thread, Lock
 from Queue import Queue
 from nanomsg import Socket, REQ, REP
 import time
@@ -48,8 +48,12 @@ class Daemon(Common):
         self.results = {}
         self.bg_tasks = []
         self.threads = {}
-        self.init()
         self.running = True
+
+        self.change_lock = Lock()
+        self.change_funcs = set()
+
+        self.init()
 
     def recv(self):
         msg = self.sock.recv()
@@ -134,11 +138,17 @@ class Daemon(Common):
             print "started thread for id=%r func=%r args=%r" % (t_id, func, args)
 
     def wrap(self, id, func, args):
-        cl = Client()
-        cl.id = id
-        res = func(cl, *args)
-        cl.call("result", id, res)
-        cl.close()
+        if func in self.change_funcs:
+            self.change_lock.acquire()
+        try :
+            cl = Client()
+            cl.id = id
+            res = func(cl, *args)
+            cl.call("result", id, res)
+            cl.close()
+        finally:
+            if func in self.change_funcs:
+                self.change_lock.release()
 
     def noop(self, *args):
         return "noop"
@@ -193,6 +203,7 @@ class Broctld(Daemon):
     def init(self):
         self._status = {}
         self.bg_tasks.append('refresh')
+        self.change_funcs = set([self.do_start, self.do_stop])
 
     def do_refresh(self, cl):
         print "Refreshing.."
@@ -214,12 +225,12 @@ class Broctld(Daemon):
                 time.sleep(random.choice([.05,.05,.1,.1,.5]))
         return self.do_status(cl)
 
-    def do_stop(self, state, out, err, *args):
+    def do_stop(self, cl, *args):
         for node in NODES:
-            out("Stopping node %s" % node)
-            state("%s.status" % node, "stopped")
+            cl.out("Stopping node %s" % node)
+            cl.setstate("%s.status" % node, "stopped")
             time.sleep(.01)
-        return self.do_status()
+        return self.do_status(cl)
 
     def do_status(self, cl, *args):
         nodes = {}
