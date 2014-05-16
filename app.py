@@ -6,6 +6,8 @@ from nanomsg import Socket, REQ, REP
 import time
 import random
 
+import ssh_runner
+
 class State:
     def __init__(self):
         self.store = {}
@@ -243,14 +245,15 @@ class Broctl:
     @expose
     def exec_command(self, cmd):
         results = {}
-        for node in self.nodes:
-            if random.choice((True,False)):
-                results[node] = "output of %s" % cmd
+        NODES = ['arpy', 'fog']
+        commands = [(node, cmd) for node in NODES]
+        outputs = ssh_runner.MultiMaster().exec_commands(commands)
+        for node, idx, status, out in outputs:
+            if status == 0:
                 self.ui.out("node %s success" % node)
             else:
-                results[node] = "FAIL"
                 self.ui.err("node %s fail" % node)
-            time.sleep(random.choice([.05,.05,.1,.1,.2]))
+            results[node] = out
         return results
 
     @expose

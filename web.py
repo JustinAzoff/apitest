@@ -24,7 +24,7 @@ def time():
 
 @app.route('/exec/:cmd')
 def start(cmd):
-    i = app.daemon.call("exec", cmd)
+    i = app.daemon.call("exec_command", cmd)
     return {"id": i} 
 
 @app.route('/result/:id')
