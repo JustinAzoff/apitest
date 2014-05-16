@@ -34,9 +34,10 @@ class Common:
         return json.loads(msg)
 
 class Daemon(Common):
-    def __init__(self, state, logs):
+    def __init__(self, state, logs, worker_class):
         self.state = state
         self.logs = logs
+        self.worker_class = worker_class
 
         self.sock = Socket(REP)
         self.sock.bind('inproc://server')
@@ -49,6 +50,8 @@ class Daemon(Common):
 
         self.change_lock = Lock()
         self.change_funcs = set()
+
+        self.id_gen = iter(range(10000000)).next
 
         self.init()
 
@@ -117,7 +120,6 @@ class Daemon(Common):
         self.send(result)
 
     def _run(self):
-        id_gen = iter(range(10000000)).next
         while self.running:
             (cmd, args) = self.recv()
             func = getattr(self, 'handle_' + cmd, None)
@@ -125,36 +127,36 @@ class Daemon(Common):
                 func(*args)
                 continue
 
-            func = getattr(self, 'do_' + cmd, self.noop)
-            
-            t_id = id_gen()
+            t_id, t = self.spawn_worker(cmd, args)
             self.send(t_id)
-            target = lambda: self.wrap(t_id, func, args)
-            t = Thread(target=target)
-            t.start()
             self.threads[t_id] = t
             print "started thread for id=%r func=%r args=%r" % (t_id, func, args)
 
-    def wrap(self, id, func, args):
-        if func in self.change_funcs:
+    def spawn_worker(self, cmd, args):
+        t_id = self.id_gen()
+        target = lambda: self.wrap(t_id, cmd, args)
+        t = Thread(target=target)
+        t.start()
+        return t_id, t
+
+    def wrap(self, id, cmd, args):
+        if cmd in self.change_funcs:
             self.change_lock.acquire()
         try :
-            cl = Client()
-            cl.id = id
-            res = func(cl, *args)
-            cl.call("result", id, res)
-            cl.close()
+            w = self.worker_class(id)
+            func = getattr(w, 'do_' + cmd, w.noop)
+            res = func(*args)
+            w.cl.call("result", id, res)
+            w.cl.close()
         finally:
-            if func in self.change_funcs:
+            if cmd in self.change_funcs:
                 self.change_lock.release()
 
-    def noop(self, *args):
-        return "noop"
-
 class Client(Common):
-    def __init__(self, uri='inproc://server'):
+    def __init__(self, uri='inproc://server', id=None):
         self.sock = Socket(REQ)
         self.sock.connect(uri)
+        self.id=id
 
     def close(self):
         self.sock.close()
@@ -194,63 +196,69 @@ class Client(Common):
     def err(self, msg):
         return self.call("err", self.id, msg)
 
-
-NODES = ['node-%d' %x for x in range(48)]
 class Broctld(Daemon):
 
     def init(self):
-        self._status = {}
+        self.nodes = ['node-%d' %x for x in range(32)]
         self.bg_tasks.append('refresh')
         self.bg_tasks.append('check')
-        self.change_funcs = set([self.do_start, self.do_stop, self.do_exec, self.do_check])
+        self.change_funcs = 'start stop exec check'.split()
 
-    def do_refresh(self, cl):
+NODES = ['node-%d' %x for x in range(48)]
+
+class BroctlWorker:
+    def __init__(self, id=None):
+        self.cl = Client(id=id)
+
+    def noop(self, *args):
+        return "noop"
+
+    def do_refresh(self):
         print "Refreshing.."
         for node in NODES:
-            status = cl.getstate("%s.status" % node)
+            status = self.cl.getstate("%s.status" % node)
             if status == "up" and random.random() < .1:
-                cl.setstate("%s.status" % node, "crashed")
+                self.cl.setstate("%s.status" % node, "crashed")
         return True
 
-    def do_check(self, cl):
+    def do_check(self):
         print "Checking..."
-        if cl.getstate("want") == "start":
-            self.do_start(cl)
+        if self.cl.getstate("want") == "start":
+            self.do_start()
 
-    def do_start(self, cl, *args):
-        cl.setstate("want", "start")
+    def do_start(self, *args):
         for node in NODES:
-            res = cl.getstate("%s.status" % node)
+            res = self.cl.getstate("%s.status" % node)
             if res == 'up':
-                cl.err("Node %s already running" % node)
+                self.cl.err("Node %s already running" % node)
             else:
-                cl.out("Starting node %s" % node)
-                cl.setstate("%s.status" % node, "up")
-                time.sleep(random.choice([.05,.05,.1,.1,.5]))
-        return self.do_status(cl)
+                self.cl.out("Starting node %s" % node)
+                self.cl.setstate("%s.status" % node, "up")
+                time.sleep(random.choice([.05,.05,.1,.1,.2]))
+        return self.do_status()
 
-    def do_stop(self, cl, *args):
-        cl.setstate("want", "stop")
+    def do_stop(self, *args):
+        self.cl.setstate("want", "stop")
         for node in NODES:
-            cl.out("Stopping node %s" % node)
-            cl.setstate("%s.status" % node, "stopped")
+            self.cl.out("Stopping node %s" % node)
+            self.cl.setstate("%s.status" % node, "stopped")
             time.sleep(.01)
-        return self.do_status(cl)
+        return self.do_status(self.cl)
 
-    def do_status(self, cl, *args):
+    def do_status(self, *args):
         nodes = {}
         for node in NODES:
-            nodes[node] = cl.getstate("%s.status" % node)
+            nodes[node] = self.cl.getstate("%s.status" % node)
         return nodes
 
-    def do_exec(self, cl, cmd):
+    def do_exec(self, cmd):
         outputs = {}
         for node in NODES:
             if random.choice((True,False)):
-                cl.out("success on %s" % node)
+                self.cl.out("success on %s" % node)
                 outputs[node]="output of %s" % cmd
             else:
-                cl.err("failure on %s" % node)
+                self.cl.err("failure on %s" % node)
                 outputs[node]="failure"
             time.sleep(random.choice([.05,.05,.1,.1,.2]))
         return outputs
@@ -260,7 +268,7 @@ def main():
     state = State()
     logs = Logs()
 
-    d = Broctld(state, logs)
+    d = Broctld(state, logs, BroctlWorker)
     dt = d.run()
     dt.join()
 
