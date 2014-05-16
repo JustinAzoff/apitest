@@ -18,6 +18,16 @@ class State:
         return self.store.get(key)
     getstate = get
 
+class TermUI:
+    def __init__(self):
+        pass
+
+    def out(self, msg):
+        print msg
+
+    def err(self, msg):
+        print "ERROR", msg
+
 class Logs:
     def __init__(self):
         self.store = defaultdict(list)
@@ -209,33 +219,41 @@ class Broctld(Daemon):
 NODES = ['node-%d' %x for x in range(48)]
 
 class Broctl:
-    def __init__(self, state):
+    def __init__(self, state, ui):
         self.nodes = NODES
         self.state = state
+        self.ui = ui
 
     def exec_command(self, cmd):
+        results = {}
         for node in self.nodes:
             if random.choice((True,False)):
-                yield node, True, "output of %s" % cmd
+                results[node] = "output of %s" % cmd
+                self.ui.out("node %s success" % node)
             else:
-                yield node, False, "failure %s" % cmd
+                results[node] = "FAIL"
+                self.ui.err("node %s fail" % node)
             time.sleep(random.choice([.05,.05,.1,.1,.2]))
+        return results
 
-    def start(self):
+    def start(self, *args):
         self.state.setstate("want", "start")
+        results = []
         for node in self.nodes:
             res = self.state.getstate("%s.status" % node)
             if res == 'up':
-                yield node, False, "Node %s already running" % node
+                self.ui.err("Node %s already running" % node)
             else:
-                yield node, False, "Starting node %s" % node
+                self.ui.out("Starting node %s" % node)
                 self.state.setstate("%s.status" % node, "up")
                 time.sleep(random.choice([.05,.05,.1,.1,.2]))
+            results.append([node, True])
+        return results
 
     def stop(self, *args):
         self.state.setstate("want", "stop")
         for node in self.nodes:
-            yield node, True, "Stopping node %s" % node
+            self.ui.out("Stopping node %s" % node)
             self.state.setstate("%s.status" % node, "stopped")
             time.sleep(.01)
 
@@ -245,10 +263,16 @@ class Broctl:
             if status == "up" and random.random() < .1:
                 self.state.setstate("%s.status" % node, "crashed")
 
+    def status(self):
+        nodes = {}
+        for node in self.nodes:
+            nodes[node] = self.state.getstate("%s.status" % node)
+        return nodes
+
 class BroctlWorker:
     def __init__(self, id=None):
         self.cl = Client(id=id)
-        self.b = Broctl(state=self.cl)
+        self.b = Broctl(state=self.cl, ui=self.cl)
 
     def noop(self, *args):
         return "noop"
@@ -264,34 +288,16 @@ class BroctlWorker:
             self.do_start()
 
     def do_start(self, *args):
-        for node, status, output in self.b.start():
-            if status:
-                self.cl.out(output)
-            else:
-                self.cl.err(output)
-        return self.do_status()
+        return self.b.start(*args)
 
     def do_stop(self, *args):
-        for node, status, output in self.b.stop():
-            if status:
-                self.cl.out(output)
-        return self.do_status(self.cl)
+        return self.b.stop(*args)
 
     def do_status(self, *args):
-        nodes = {}
-        for node in NODES:
-            nodes[node] = self.cl.getstate("%s.status" % node)
-        return nodes
+        return self.b.status()
 
     def do_exec(self, cmd):
-        b = Broctl(state=self.cl)
-        outputs = {}
-        for node, status, output in b.exec_command(cmd):
-            outputs[node]=output
-            if status:
-                self.cl.out("success on %s" % node)
-            else:
-                self.cl.err("failure on %s" % node)
+        outputs = self.b.exec_command(cmd)
         return outputs
 
 def main():
