@@ -21,7 +21,7 @@ def wait(id):
     while True:
         res = requests.get("http://localhost:8082/result/%d" % id).json()
         last = log(id, last)
-        if res['result']:
+        if res['result'] is not None:
             return res['result']
         time.sleep(.2)
 
@@ -35,7 +35,9 @@ def call(action):
     return res
 
 if __name__ == "__main__":
-    if sys.argv[1] == 'bg':
+    if sys.argv[1] == 'status':
+        pprint.pprint(call('status'))
+    elif sys.argv[1] == 'bg':
         pprint.pprint(call(sys.argv[2]))
     else:
         run(sys.argv[1])

@@ -156,8 +156,11 @@ class Daemon(Common):
             self.change_lock.acquire()
         try :
             w = self.worker_class(id)
-            func = getattr(w, 'do_' + cmd, w.do_noop)
-            res = func(*args)
+            func = getattr(w, cmd, w.noop)
+            if hasattr(func, 'api_exposed'):
+                res = func(*args)
+            else:
+                res = "invalid function"
             w.cl.call("result", id, res)
             w.cl.close()
         finally:
@@ -213,10 +216,14 @@ class Broctld(Daemon):
     def init(self):
         self.nodes = ['node-%d' %x for x in range(32)]
         self.bg_tasks.append('refresh')
-        self.bg_tasks.append('check')
-        self.change_funcs = 'start stop exec check'.split()
+        self.bg_tasks.append('cron')
+        self.change_funcs = 'start stop exec cron'.split()
 
 NODES = ['node-%d' %x for x in range(48)]
+
+def expose(func):
+    func.api_exposed = True
+    return func
 
 class Broctl:
     def __init__(self, state, ui):
@@ -224,7 +231,15 @@ class Broctl:
         self.state = state
         self.ui = ui
 
-    def do_exec_command(self, cmd):
+    @expose
+    def cron(self):
+        print "Checking..."
+        if self.state.getstate("want") == "start":
+            self.start()
+        return True
+
+    @expose
+    def exec_command(self, cmd):
         results = {}
         for node in self.nodes:
             if random.choice((True,False)):
@@ -236,7 +251,8 @@ class Broctl:
             time.sleep(random.choice([.05,.05,.1,.1,.2]))
         return results
 
-    def do_start(self, *args):
+    @expose
+    def start(self, *args):
         self.state.setstate("want", "start")
         results = []
         for node in self.nodes:
@@ -250,7 +266,8 @@ class Broctl:
             results.append([node, True])
         return results
 
-    def do_stop(self, *args):
+    @expose
+    def stop(self, *args):
         self.state.setstate("want", "stop")
         for node in self.nodes:
             self.ui.out("Stopping node %s" % node)
@@ -258,19 +275,23 @@ class Broctl:
             time.sleep(.01)
         return True
 
-    def do_refresh(self):
+    @expose
+    def refresh(self):
         for node in self.nodes:
             status = self.state.getstate("%s.status" % node)
             if status == "up" and random.random() < .1:
                 self.state.setstate("%s.status" % node, "crashed")
+        return True
 
-    def do_status(self):
+    @expose
+    def status(self):
         nodes = {}
         for node in self.nodes:
             nodes[node] = self.state.getstate("%s.status" % node)
         return nodes
 
-    def do_noop(self, *args):
+    @expose
+    def noop(self, *args):
         return "noop"
 
 def broctl_worker_factory(id):
