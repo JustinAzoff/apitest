@@ -12,9 +12,11 @@ class State:
 
     def set(self, key, value):
         self.store[key] = value
+    setstate = set
 
     def get(self, key):
         return self.store.get(key)
+    getstate = get
 
 class Logs:
     def __init__(self):
@@ -206,19 +208,54 @@ class Broctld(Daemon):
 
 NODES = ['node-%d' %x for x in range(48)]
 
+class Broctl:
+    def __init__(self, state):
+        self.nodes = NODES
+        self.state = state
+
+    def exec_command(self, cmd):
+        for node in self.nodes:
+            if random.choice((True,False)):
+                yield node, True, "output of %s" % cmd
+            else:
+                yield node, False, "failure %s" % cmd
+            time.sleep(random.choice([.05,.05,.1,.1,.2]))
+
+    def start(self):
+        self.state.setstate("want", "start")
+        for node in self.nodes:
+            res = self.state.getstate("%s.status" % node)
+            if res == 'up':
+                yield node, False, "Node %s already running" % node
+            else:
+                yield node, False, "Starting node %s" % node
+                self.state.setstate("%s.status" % node, "up")
+                time.sleep(random.choice([.05,.05,.1,.1,.2]))
+
+    def stop(self, *args):
+        self.state.setstate("want", "stop")
+        for node in self.nodes:
+            yield node, True, "Stopping node %s" % node
+            self.state.setstate("%s.status" % node, "stopped")
+            time.sleep(.01)
+
+    def refresh(self):
+        for node in self.nodes:
+            status = self.state.getstate("%s.status" % node)
+            if status == "up" and random.random() < .1:
+                self.state.setstate("%s.status" % node, "crashed")
+
 class BroctlWorker:
     def __init__(self, id=None):
         self.cl = Client(id=id)
+        self.b = Broctl(state=self.cl)
 
     def noop(self, *args):
         return "noop"
 
     def do_refresh(self):
         print "Refreshing.."
-        for node in NODES:
-            status = self.cl.getstate("%s.status" % node)
-            if status == "up" and random.random() < .1:
-                self.cl.setstate("%s.status" % node, "crashed")
+        self.b.refresh()
         return True
 
     def do_check(self):
@@ -227,22 +264,17 @@ class BroctlWorker:
             self.do_start()
 
     def do_start(self, *args):
-        for node in NODES:
-            res = self.cl.getstate("%s.status" % node)
-            if res == 'up':
-                self.cl.err("Node %s already running" % node)
+        for node, status, output in self.b.start():
+            if status:
+                self.cl.out(output)
             else:
-                self.cl.out("Starting node %s" % node)
-                self.cl.setstate("%s.status" % node, "up")
-                time.sleep(random.choice([.05,.05,.1,.1,.2]))
+                self.cl.err(output)
         return self.do_status()
 
     def do_stop(self, *args):
-        self.cl.setstate("want", "stop")
-        for node in NODES:
-            self.cl.out("Stopping node %s" % node)
-            self.cl.setstate("%s.status" % node, "stopped")
-            time.sleep(.01)
+        for node, status, output in self.b.stop():
+            if status:
+                self.cl.out(output)
         return self.do_status(self.cl)
 
     def do_status(self, *args):
@@ -252,15 +284,14 @@ class BroctlWorker:
         return nodes
 
     def do_exec(self, cmd):
+        b = Broctl(state=self.cl)
         outputs = {}
-        for node in NODES:
-            if random.choice((True,False)):
+        for node, status, output in b.exec_command(cmd):
+            outputs[node]=output
+            if status:
                 self.cl.out("success on %s" % node)
-                outputs[node]="output of %s" % cmd
             else:
                 self.cl.err("failure on %s" % node)
-                outputs[node]="failure"
-            time.sleep(random.choice([.05,.05,.1,.1,.2]))
         return outputs
 
 def main():
