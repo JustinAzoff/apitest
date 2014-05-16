@@ -38,6 +38,7 @@ class Daemon:
         self.results = {}
         self.threads = {}
         self.init()
+        self.running = True
 
     def run(self):
         t = Thread(target=self._bg)
@@ -87,7 +88,7 @@ class Daemon:
 
     def _run(self):
         id_gen = iter(range(10000000)).next
-        while True:
+        while self.running:
             (cmd, args) = self.cq.get()
             func = getattr(self, 'handle_' + cmd, None)
             if func:
