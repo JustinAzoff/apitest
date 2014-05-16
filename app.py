@@ -46,6 +46,8 @@ class Common:
         return json.loads(msg)
 
 class Daemon(Common):
+    change_funcs = set()
+    bg_tasks = []
     def __init__(self, state, logs, worker_class):
         self.state = state
         self.logs = logs
@@ -56,12 +58,10 @@ class Daemon(Common):
         self.sock.bind('ipc://socket')
 
         self.results = {}
-        self.bg_tasks = []
         self.threads = {}
         self.running = True
 
         self.change_lock = Lock()
-        self.change_funcs = set()
 
         self.id_gen = iter(range(10000000)).next
 
