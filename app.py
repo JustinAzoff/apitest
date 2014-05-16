@@ -202,7 +202,7 @@ class Broctld(Daemon):
         self._status = {}
         self.bg_tasks.append('refresh')
         self.bg_tasks.append('check')
-        self.change_funcs = set([self.do_start, self.do_stop, self.do_exec])
+        self.change_funcs = set([self.do_start, self.do_stop, self.do_exec, self.do_check])
 
     def do_refresh(self, cl):
         print "Refreshing.."
