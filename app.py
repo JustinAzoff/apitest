@@ -67,6 +67,9 @@ class Daemon(Common):
 
         self.init()
 
+    def init(self):
+        pass
+
     def recv(self):
         msg = self.sock.recv()
         #print "Received", self.load(msg)
@@ -212,12 +215,8 @@ class Client(Common):
         return self.call("err", self.id, msg)
 
 class Broctld(Daemon):
-
-    def init(self):
-        self.nodes = ['node-%d' %x for x in range(32)]
-        self.bg_tasks.append('refresh')
-        self.bg_tasks.append('cron')
-        self.change_funcs = 'start stop exec cron'.split()
+    bg_tasks =['refresh', 'cron']
+    change_funcs = 'start stop exec cron'.split()
 
 NODES = ['node-%d' %x for x in range(48)]
 
