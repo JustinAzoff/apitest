@@ -79,6 +79,10 @@ class SSHMaster:
         status, output = self.exec_command("echo ping")
         return output.strip() == "ping"
 
+    def close(self):
+        self.master.stdin.close()
+    __del__ = close
+
 class MultiMaster:
     def __init__(self):
         self.masters = {}
@@ -86,6 +90,11 @@ class MultiMaster:
     def connect(self, host):
         conn = SSHMaster(host)
         self.masters[host] = conn
+
+    def close(self):
+        for conn in self.masters.values():
+            conn.close()
+    __del__ = close
 
     def exec_commands(self, cmds):
         hosts = collections.defaultdict(list)
