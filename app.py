@@ -89,8 +89,9 @@ class Daemon(Common):
         self.send("ok")
 
     def handle_getstate(self, key):
-        print "Get state key=%r" % (key)
-        self.send(self.state.get(key))
+        value = self.state.get(key)
+        print "Get state key=%r value=%r" % (key, value)
+        self.send(value)
 
     def handle_out(self, id, txt):
         print "Got %s id=%r result=%r" % ('out', id, txt)
@@ -200,6 +201,7 @@ class Broctld(Daemon):
     def init(self):
         self._status = {}
         self.bg_tasks.append('refresh')
+        self.bg_tasks.append('check')
         self.change_funcs = set([self.do_start, self.do_stop, self.do_exec])
 
     def do_refresh(self, cl):
@@ -210,8 +212,13 @@ class Broctld(Daemon):
                 cl.setstate("%s.status" % node, "crashed")
         return True
 
+    def do_check(self, cl):
+        print "Checking..."
+        if cl.getstate("want") == "start":
+            self.do_start(cl)
+
     def do_start(self, cl, *args):
-        time.sleep(1)
+        cl.setstate("want", "start")
         for node in NODES:
             res = cl.getstate("%s.status" % node)
             if res == 'up':
@@ -223,6 +230,7 @@ class Broctld(Daemon):
         return self.do_status(cl)
 
     def do_stop(self, cl, *args):
+        cl.setstate("want", "stop")
         for node in NODES:
             cl.out("Stopping node %s" % node)
             cl.setstate("%s.status" % node, "stopped")
