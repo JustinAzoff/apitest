@@ -109,28 +109,3 @@ class MultiMaster:
         for host in hosts:
             for idx, (status, output) in self.masters[host].collect_results().items():
                 yield host, idx, status, output
-
-if __name__ == "__main__":
-    import sys
-    ssh = SSHMaster(sys.argv[1])
-
-    #for x in 'one','two','three':
-    #    print repr(ssh.exec_command("echo %s" % x))
-
-    print "ping:", ssh.ping()
-    commands = ['sleep %d;echo %d' % (x%5, x) for x in range(32)]
-
-    results = ssh.exec_commands(commands)
-    for x in results.items():
-        print x
-
-    print "ping:", ssh.ping()
-
-    multi_commands = []
-    for c in commands:
-        multi_commands.append(('fog', c))
-        multi_commands.append(('arpy', c))
-
-    m = MultiMaster()
-    for x in m.exec_commands(multi_commands):
-        print x
