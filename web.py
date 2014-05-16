@@ -1,3 +1,4 @@
+from app import Client
 from bottle import Bottle, run
 
 app = Bottle()
@@ -38,6 +39,9 @@ def result(id, since=0):
     since = int(since)
     return {"log": app.daemon.getlog(id, since) or []}
 
-def run_app(daemon):
-    app.daemon = daemon
+def main():
+    app.daemon = Client('ipc://socket')
     run(app, host='localhost', port=8082)
+
+if __name__ == "__main__":
+    main()
