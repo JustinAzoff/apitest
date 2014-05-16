@@ -2,6 +2,7 @@ from collections import defaultdict
 from threading import Thread
 from Queue import Queue
 import time
+import random
 
 import web
 class State:
@@ -36,6 +37,7 @@ class Daemon:
         self.rq = Queue()
 
         self.results = {}
+        self.bg_tasks = []
         self.threads = {}
         self.init()
         self.running = True
@@ -50,15 +52,17 @@ class Daemon:
     def _bg(self):
         while True:
             self._time = time.ctime()
+            for func in self.bg_tasks:
+                self.call(func)
             #self.call('start')
-            time.sleep(5)
+            time.sleep(10)
 
     def handle_result(self, id, result):
         print "Got result id=%r result=%r" % (id, result)
         self.results[id] = result
 
     def handle_setstate(self, key, value):
-        print "Got state key=%r value=%r" % (key, value)
+        print "Set state key=%r value=%r" % (key, value)
         self.state.set(key, value)
 
     def handle_getstate(self, key):
@@ -124,6 +128,10 @@ class Daemon:
         self.cq.put(("getstate", [key]))
         return self.rq.get()
 
+    def setstate(self, key, value):
+        self.cq.put(("setstate", [key, value]))
+        return self.rq.get()
+
     def getlog(self, id, since=0):
         self.cq.put(("getlog", [id, since]))
         return self.rq.get()
@@ -139,36 +147,57 @@ class Daemon:
     def noop(self, *args):
         return "noop"
 
-NODES = 48
+NODES = ['node-%d' %x for x in range(48)]
 class Broctld(Daemon):
 
     def init(self):
         self._status = {}
+        #self.bg_tasks.append('refresh')
+
+    def do_refresh(self, state, out, err):
+        print "Refreshing.."
+        for node in NODES:
+            status = self.getstate("%s.status" % node)
+            if status == "up" and random.random() < .1:
+                self.setstate("%s.status" % node, "crashed")
+        return True
 
     def do_start(self, state, out, err, *args):
         time.sleep(1)
-        for x in range(NODES):
-            res = self.getstate("node-%d.status" % x)
+        for node in NODES:
+            res = self.getstate("%s.status" % node)
             if res == 'up':
-                err("Node %d already running" % x)
+                err("Node %s already running" % node)
             else:
-                out("Starting node %d" % x)
-                state("node-%d.status" % x, "up")
-                time.sleep(.05)
-        return True
+                out("Starting node %s" % node)
+                state("%s.status" % node, "up")
+                time.sleep(random.choice([.05,.05,.1,.1,.5]))
+        return self.do_status()
 
     def do_stop(self, state, out, err, *args):
-        for x in range(NODES):
-            out("Stopping node %d" % x)
-            state("node-%d.status" % x, "stopped")
+        for node in NODES:
+            out("Stopping node %s" % node)
+            state("%s.status" % node, "stopped")
             time.sleep(.01)
-        return True
+        return self.do_status()
 
     def do_status(self, *args):
         nodes = {}
-        for x in range(NODES):
-            nodes["node-%d" % x] = self.getstate("node-%d.status" % x)
+        for node in NODES:
+            nodes[node] = self.getstate("%s.status" % node)
         return nodes
+
+    def do_exec(self, state, out, err, cmd):
+        outputs = {}
+        for node in NODES:
+            if random.choice((True,False)):
+                out("success on %s" % node)
+                outputs[node]="output of %s" % cmd
+            else:
+                err("failure on %s" % node)
+                outputs[node]="failure"
+            time.sleep(random.choice([.05,.05,.1,.1,.2]))
+        return outputs
 
     def do_time(self, *args):
         return self._time

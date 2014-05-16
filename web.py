@@ -21,6 +21,11 @@ def status():
 def time():
     return app.daemon.sync_call("time")
 
+@app.route('/exec/:cmd')
+def start(cmd):
+    i = app.daemon.call("exec", cmd)
+    return {"id": i} 
+
 @app.route('/result/:id')
 def result(id):
     id = int(id)

@@ -22,13 +22,13 @@ def wait(id):
         res = requests.get("http://localhost:8082/result/%d" % id).json()
         last = log(id, last)
         if res['result']:
-            return
+            return res['result']
         time.sleep(.2)
 
 
 def run(action):
     res = requests.get("http://localhost:8082/%s" % action).json()
-    wait(res['id'])
+    pprint.pprint(wait(res['id']))
 
 def call(action):
     res = requests.get("http://localhost:8082/%s" % action).json()
@@ -39,4 +39,3 @@ if __name__ == "__main__":
         pprint.pprint(call(sys.argv[2]))
     else:
         run(sys.argv[1])
-        pprint.pprint(call("status"))
