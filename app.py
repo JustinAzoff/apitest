@@ -156,7 +156,7 @@ class Daemon(Common):
             self.change_lock.acquire()
         try :
             w = self.worker_class(id)
-            func = getattr(w, 'do_' + cmd, w.noop)
+            func = getattr(w, 'do_' + cmd, w.do_noop)
             res = func(*args)
             w.cl.call("result", id, res)
             w.cl.close()
@@ -224,7 +224,7 @@ class Broctl:
         self.state = state
         self.ui = ui
 
-    def exec_command(self, cmd):
+    def do_exec_command(self, cmd):
         results = {}
         for node in self.nodes:
             if random.choice((True,False)):
@@ -236,7 +236,7 @@ class Broctl:
             time.sleep(random.choice([.05,.05,.1,.1,.2]))
         return results
 
-    def start(self, *args):
+    def do_start(self, *args):
         self.state.setstate("want", "start")
         results = []
         for node in self.nodes:
@@ -250,62 +250,41 @@ class Broctl:
             results.append([node, True])
         return results
 
-    def stop(self, *args):
+    def do_stop(self, *args):
         self.state.setstate("want", "stop")
         for node in self.nodes:
             self.ui.out("Stopping node %s" % node)
             self.state.setstate("%s.status" % node, "stopped")
             time.sleep(.01)
+        return True
 
-    def refresh(self):
+    def do_refresh(self):
         for node in self.nodes:
             status = self.state.getstate("%s.status" % node)
             if status == "up" and random.random() < .1:
                 self.state.setstate("%s.status" % node, "crashed")
 
-    def status(self):
+    def do_status(self):
         nodes = {}
         for node in self.nodes:
             nodes[node] = self.state.getstate("%s.status" % node)
         return nodes
 
-class BroctlWorker:
-    def __init__(self, id=None):
-        self.cl = Client(id=id)
-        self.b = Broctl(state=self.cl, ui=self.cl)
-
-    def noop(self, *args):
+    def do_noop(self, *args):
         return "noop"
 
-    def do_refresh(self):
-        print "Refreshing.."
-        self.b.refresh()
-        return True
-
-    def do_check(self):
-        print "Checking..."
-        if self.cl.getstate("want") == "start":
-            self.do_start()
-
-    def do_start(self, *args):
-        return self.b.start(*args)
-
-    def do_stop(self, *args):
-        return self.b.stop(*args)
-
-    def do_status(self, *args):
-        return self.b.status()
-
-    def do_exec(self, cmd):
-        outputs = self.b.exec_command(cmd)
-        return outputs
+def broctl_worker_factory(id):
+    cl = Client(id=id)
+    worker = Broctl(state=cl, ui=cl)
+    worker.cl = cl
+    return worker
 
 def main():
 
     state = State()
     logs = Logs()
 
-    d = Broctld(state, logs, BroctlWorker)
+    d = Broctld(state, logs, broctl_worker_factory)
     dt = d.run()
     dt.join()
 
