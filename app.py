@@ -19,16 +19,13 @@ class State:
 class Logs:
     def __init__(self):
         self.store = defaultdict(list)
-        self.ids = defaultdict(int)
 
     def append(self, id, stream, txt):
-        self.ids[id] += 1
-        msg_id = self.ids[id]
-        self.store[id].append((msg_id, stream, txt))
+        self.store[id].append((stream, txt))
 
     def get(self, id, since=0):
         msgs = self.store.get(id) or []
-        return [m for m in msgs if m[0] > since]
+        return msgs[since:]
 
 class Common:
     def dump(self, *args):
@@ -203,7 +200,7 @@ class Broctld(Daemon):
     def init(self):
         self._status = {}
         self.bg_tasks.append('refresh')
-        self.change_funcs = set([self.do_start, self.do_stop])
+        self.change_funcs = set([self.do_start, self.do_stop, self.do_exec])
 
     def do_refresh(self, cl):
         print "Refreshing.."

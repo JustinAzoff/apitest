@@ -12,8 +12,8 @@ def log(id, last):
         return last
 
     for rec in res['log']:
-        print ' '.join(rec[1:])
-    return rec[0]
+        print ' '.join(rec)
+    return len(res['log'])
 
 def wait(id):
     print "Waiting for job %d to finish" % id
