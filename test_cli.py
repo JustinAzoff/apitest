@@ -3,6 +3,7 @@ import sys
 import requests
 import time
 import pprint
+import json
 
 def log(id, last):
     res = requests.get("http://localhost:8082/log/%d/%d" % (id, last)).json()
@@ -12,8 +13,8 @@ def log(id, last):
         return last
 
     for rec in res['log']:
-        print ' '.join(rec)
-    return len(res['log'])
+        print ' '.join(rec), '                '
+    return last+len(res['log'])
 
 def wait(id):
     print "Waiting for job %d to finish" % id
@@ -22,22 +23,25 @@ def wait(id):
         res = requests.get("http://localhost:8082/result/%d" % id).json()
         last = log(id, last)
         if res['result'] is not None:
-            return res['result']
+            return json.dumps(res['result'])
         time.sleep(.2)
 
 
 def run(action):
     res = requests.get("http://localhost:8082/%s" % action).json()
-    pprint.pprint(wait(res['id']))
+    print(wait(res['id']))
 
 def call(action):
-    res = requests.get("http://localhost:8082/%s" % action).json()
+    out = requests.get("http://localhost:8082/%s" % action).text
+    return str(out)
+    try:
+        return json.loads(out)
+    except:
+        return out
     return res
 
 if __name__ == "__main__":
-    if sys.argv[1] == 'status':
-        pprint.pprint(call('status'))
-    elif sys.argv[1] == 'bg':
-        pprint.pprint(call(sys.argv[2]))
+    if sys.argv[1] == 'bg':
+        print call(sys.argv[2])
     else:
         run(sys.argv[1])
