@@ -10,9 +10,12 @@ import subprocess
 
 def exec_commands(cmds):
     procs = []
-    for cmd in cmds:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        procs.append(proc)
+    for i, cmd in enumerate(cmds):
+        try :
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+            procs.append((i, proc))
+        except Exception, e:
+            print json.dumps((i, (1, str(e))))
     return procs
 print json.dumps("ready")
 sys.stdout.flush()
@@ -22,7 +25,7 @@ while True:
     if line.strip() == "done":
         break
     commands.append(json.loads(line))
-procs = list(enumerate(exec_commands(commands)))
+procs = exec_commands(commands)
 
 while procs:
     done = [(i,p) for (i,p) in procs if p.poll() is not None]
