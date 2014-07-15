@@ -11,7 +11,7 @@ import subprocess
 def exec_commands(cmds):
     procs = []
     for cmd in cmds:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         procs.append(proc)
     return procs
 print json.dumps("ready")
@@ -21,7 +21,7 @@ while True:
     line = sys.stdin.readline()
     if line.strip() == "done":
         break
-    commands.append(line)
+    commands.append(json.loads(line))
 procs = list(enumerate(exec_commands(commands)))
 
 while procs:
@@ -60,7 +60,7 @@ class SSHMaster:
         self.master.stdin.write(run_mux)
         self.readline_with_timeout(timeout)
         for cmd in cmds:
-            self.master.stdin.write(cmd + "\n")
+            self.master.stdin.write(json.dumps(cmd) + "\n")
         self.master.stdin.write("done\n")
         self.master.stdin.flush()
 
