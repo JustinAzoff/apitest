@@ -12,10 +12,10 @@ def exec_commands(cmds):
     procs = []
     for i, cmd in enumerate(cmds):
         try :
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             procs.append((i, proc))
         except Exception, e:
-            print json.dumps((i, (1, str(e))))
+            print json.dumps((i, (1, '', str(e))))
     return procs
 print json.dumps("ready")
 sys.stdout.flush()
@@ -32,9 +32,14 @@ while procs:
     procs = [x for x in procs if x not in done]
 
     for i, p in done:
-        print json.dumps((i, (p.poll(), p.stdout.read())))
+        res = p.poll()
+        out = p.stdout.read()
+        err = p.stderr.read()
+        print json.dumps((i, (res, out, err)))
 print json.dumps("done")
 """.encode("base64").replace("\n", "")
+
+CmdResult = collections.namedtuple("CmdResult", "status stdout stderr")
 
 class SSHMaster:
     def __init__(self, host):
@@ -59,23 +64,25 @@ class SSHMaster:
         return self.collect_results(timeout)
 
     def send_commands(self, cmds, timeout=30):
+        self.sent_commands = 0
         run_mux =  """python -c 'exec("%s".decode("base64"))'\n""" % muxer
         self.master.stdin.write(run_mux)
         self.readline_with_timeout(timeout)
         for cmd in cmds:
             self.master.stdin.write(json.dumps(cmd) + "\n")
+            self.sent_commands += 1
         self.master.stdin.write("done\n")
         self.master.stdin.flush()
 
     def collect_results(self, timeout=30):
-        outputs = {}
+        outputs = [None] * self.sent_commands
         while True:
             line = self.readline_with_timeout(timeout)
             resp = json.loads(line)
             if resp == "done":
                 break
             idx, out = resp
-            outputs[idx] = out
+            outputs[idx] = CmdResult(*out)
         return outputs
 
     def ping(self, timeout=2):
@@ -110,5 +117,5 @@ class MultiMaster:
             self.masters[host].send_commands(cmds)
 
         for host in hosts:
-            for idx, (status, output) in self.masters[host].collect_results().items():
-                yield host, idx, status, output
+            for res in self.masters[host].collect_results():
+                yield host, res
