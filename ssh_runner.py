@@ -86,8 +86,8 @@ class SSHMaster:
         return outputs
 
     def ping(self, timeout=2):
-        status, output = self.exec_command("echo ping")
-        return output.strip() == "ping"
+        res = self.exec_command("echo ping")
+        return res.stdout.strip() == "ping"
 
     def close(self):
         self.master.stdin.close()
