@@ -125,7 +125,7 @@ class MultiMaster:
 from threading import Thread
 from Queue import Queue, Empty
 
-stop_running = object()
+STOP_RUNNING = object()
 
 class HostHandler(Thread):
     def __init__(self, host):
@@ -134,6 +134,9 @@ class HostHandler(Thread):
         self.oq = Queue()
         Thread.__init__(self)
         self.alive = "Unknown"
+
+    def shutdown(self):
+        self.q.put(STOP_RUNNING)
 
     def connect(self):
         print "Connecting to", self.host
@@ -162,7 +165,7 @@ class HostHandler(Thread):
             self.alive = self.ping()
             return
 
-        if item is stop_running:
+        if item is STOP_RUNNING:
             return True
         try :
             resp = self.master.exec_commands(item)
@@ -222,5 +225,5 @@ class MultiMasterManager:
 
     def shutdown(self):
         for handler in self.masters.values():
-            handler.send_commands(stop_running)
+            handler.shutdown()
         self.masters = {}
