@@ -93,6 +93,11 @@ class SSHMaster:
 
     def close(self):
         self.master.stdin.close()
+        try:
+            self.master.kill()
+        except OSError:
+            pass
+        self.master.wait()
     __del__ = close
 
 class MultiMaster:
@@ -134,12 +139,15 @@ class HostHandler(Thread):
         self.oq = Queue()
         Thread.__init__(self)
         self.alive = "Unknown"
+        self.master = None
 
     def shutdown(self):
         self.q.put(STOP_RUNNING)
 
     def connect(self):
         print "Connecting to", self.host
+        if self.master:
+            self.master.close()
         self.master = SSHMaster(self.host)
         self.alive = self.ping()
 
