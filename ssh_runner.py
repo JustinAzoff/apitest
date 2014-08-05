@@ -157,7 +157,7 @@ class HostHandler(Thread):
             self.connect()
 
         try :
-            item = self.q.get(timeout=2)
+            item = self.q.get(timeout=30)
         except Empty:
             self.alive = self.ping()
             return
