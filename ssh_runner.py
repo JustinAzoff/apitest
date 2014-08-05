@@ -223,3 +223,4 @@ class MultiMasterManager:
     def shutdown(self):
         for handler in self.masters.values():
             handler.send_commands(stop_running)
+        self.masters = {}
