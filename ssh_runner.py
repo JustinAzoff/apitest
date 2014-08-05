@@ -181,7 +181,7 @@ class HostHandler(Thread):
             print "Exception in iteration for %s" % self.host
             self.alive = False
             time.sleep(2)
-            resp = [e]
+            resp = [e] * len(item)
         self.oq.put(resp)
 
     def send_commands(self, commands):
