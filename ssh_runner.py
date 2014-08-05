@@ -2,6 +2,7 @@ import collections
 import json
 import subprocess
 import select
+import time
 
 muxer="""
 import json
@@ -11,6 +12,7 @@ import subprocess
 def exec_commands(cmds):
     procs = []
     for i, cmd in enumerate(cmds):
+        open("/tmp/whatever", 'w').write(repr(cmd))
         try :
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             procs.append((i, proc))
@@ -86,8 +88,8 @@ class SSHMaster:
         return outputs
 
     def ping(self, timeout=2):
-        status, output = self.exec_command("echo ping")
-        return output.strip() == "ping"
+        output = self.exec_command(["/bin/echo", "ping"])
+        return output and output.stdout.strip() == "ping"
 
     def close(self):
         self.master.stdin.close()
@@ -119,3 +121,105 @@ class MultiMaster:
         for host in hosts:
             for res in self.masters[host].collect_results():
                 yield host, res
+
+from threading import Thread
+from Queue import Queue, Empty
+
+stop_running = object()
+
+class HostHandler(Thread):
+    def __init__(self, host):
+        self.host = host
+        self.q = Queue()
+        self.oq = Queue()
+        Thread.__init__(self)
+        self.alive = "Unknown"
+
+    def connect(self):
+        print "Connecting to", self.host
+        self.master = SSHMaster(self.host)
+        self.alive = self.ping()
+
+    def run(self):
+        while True:
+            if self.iteration():
+                return
+
+    def ping(self):
+        try :
+            return self.master.ping()
+        except Exception, e:
+            print "Error in ping for %s" % self.host
+            return False
+
+    def iteration(self):
+        if self.alive is not True:
+            self.connect()
+
+        try :
+            item = self.q.get(timeout=2)
+        except Empty:
+            self.alive = self.ping()
+            return
+
+        if item is stop_running:
+            return True
+        try :
+            resp = self.master.exec_commands(item)
+        except Exception, e:
+            print "Exception in iteration for %s" % self.host
+            self.alive = False
+            time.sleep(2)
+            resp = [e]
+        self.oq.put(resp)
+
+    def send_commands(self, commands):
+        self.q.put(commands)
+
+    def get_result(self, timeout=None):
+        try :
+            return self.oq.get(timeout=timeout)
+        except Empty:
+            return ["Timeout"]
+            
+
+class MultiMasterManager:
+    def __init__(self):
+        self.masters = {}
+
+    def setup(self, host):
+        if host not in self.masters:
+            self.masters[host] = HostHandler(host)
+            self.masters[host].start()
+
+    def send_commands(self, host, commands):
+        self.setup(host)
+        self.masters[host].send_commands(commands)
+
+    def exec_command(self, host, command):
+        return self.exec_commands(host, [command])[0]
+
+    def exec_commands(self, host, commands, timeout=10):
+        self.setup(host)
+        self.masters[host].send_commands(commands)
+        return self.masters[host].get_result(timeout)
+
+    def exec_multihost_commands(self, cmds, timeout=10):
+        hosts = collections.defaultdict(list)
+        for host, cmd in cmds:
+            hosts[host].append(cmd)
+
+        for host, cmds in hosts.items():
+            self.send_commands(host, cmds)
+
+        for host in hosts:
+            for res in self.masters[host].get_result(timeout):
+                yield host, res
+
+    def host_status(self):
+        for h, o in self.masters.items():
+            yield h, o.alive
+
+    def shutdown(self):
+        for handler in self.masters.values():
+            handler.send_commands(stop_running)
