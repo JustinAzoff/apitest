@@ -12,7 +12,6 @@ import subprocess
 def exec_commands(cmds):
     procs = []
     for i, cmd in enumerate(cmds):
-        open("/tmp/whatever", 'w').write(repr(cmd))
         try :
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             procs.append((i, proc))
