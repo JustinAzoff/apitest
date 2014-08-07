@@ -29,10 +29,22 @@ def go(m):
             ]):
             print res
 
+        print "testing perf"
+        s = time.time()
+        cmds = []
+        for host in 'arpy', 'rp2':
+            for arg in range(32):
+                cmds.append((host, ["echo", str(arg)]))
+        for res in m.exec_multihost_commands(cmds):
+            print res
+        e = time.time()
+        print len(cmds), "commands across 2 hosts took %.2f" % (e-s)
+
         cmds = []
         for host in 'arpy', 'rp2':
             for arg in range(9):
-                cmds.append((host, ["/bin/sleep", str(arg)]))
+                cmd = "sleep %s && echo slept for %d" % (arg, arg)
+                cmds.append((host, ["/bin/sh", "-c", cmd]))
 
         for res in m.exec_multihost_commands(cmds):
             print res
