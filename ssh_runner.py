@@ -235,3 +235,5 @@ class MultiMasterManager:
         for handler in self.masters.values():
             handler.shutdown()
         self.masters = {}
+
+    __del__ = shutdown
