@@ -58,14 +58,14 @@ class SSHMaster:
             raise Exception("SSH Timeout")
         return self.master.stdout.readline()
 
-    def exec_command(self, cmd, timeout=30):
+    def exec_command(self, cmd, timeout=10):
         return self.exec_commands([cmd], timeout)[0]
 
-    def exec_commands(self, cmds, timeout=30):
+    def exec_commands(self, cmds, timeout=10):
         self.send_commands(cmds, timeout)
         return self.collect_results(timeout)
 
-    def send_commands(self, cmds, timeout=30):
+    def send_commands(self, cmds, timeout=10):
         self.sent_commands = 0
         run_mux =  """python -c 'exec("%s".decode("base64"))'\n""" % muxer
         self.master.stdin.write(run_mux)
@@ -76,7 +76,7 @@ class SSHMaster:
         self.master.stdin.write("done\n")
         self.master.stdin.flush()
 
-    def collect_results(self, timeout=30):
+    def collect_results(self, timeout=10):
         outputs = [None] * self.sent_commands
         while True:
             line = self.readline_with_timeout(timeout)
@@ -207,15 +207,15 @@ class MultiMasterManager:
         self.setup(host)
         self.masters[host].send_commands(commands)
 
-    def exec_command(self, host, command):
-        return self.exec_commands(host, [command])[0]
+    def exec_command(self, host, command, timeout=15):
+        return self.exec_commands(host, [command], timeout)[0]
 
-    def exec_commands(self, host, commands, timeout=10):
+    def exec_commands(self, host, commands, timeout=15):
         self.setup(host)
         self.masters[host].send_commands(commands)
         return self.masters[host].get_result(timeout)
 
-    def exec_multihost_commands(self, cmds, timeout=10):
+    def exec_multihost_commands(self, cmds, timeout=15):
         hosts = collections.defaultdict(list)
         for host, cmd in cmds:
             hosts[host].append(cmd)

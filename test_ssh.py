@@ -31,8 +31,8 @@ def go(m):
 
         cmds = []
         for host in 'arpy', 'rp2':
-            for arg in range(16):
-                cmds.append((host, ["/bin/echo", str(arg)]))
+            for arg in range(9):
+                cmds.append((host, ["/bin/sleep", str(arg)]))
 
         for res in m.exec_multihost_commands(cmds):
             print res
