@@ -12,6 +12,8 @@ import subprocess
 import os
 import time
 
+TIMEOUT=60
+
 class LineReader(object):
 
     def __init__(self, fd):
@@ -66,7 +68,8 @@ for line in getlines():
     commands.append(json.loads(line))
 procs = exec_commands(commands)
 
-while procs:
+start = time.time()
+while time.time() - start < TIMEOUT:
     done = [(i,p) for (i,p) in procs if p.poll() is not None]
     procs = [x for x in procs if x not in done]
 
