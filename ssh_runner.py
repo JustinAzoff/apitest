@@ -4,11 +4,14 @@ import subprocess
 import select
 import time
 
-muxer="""
+muxer=r"""
 import json
 import sys
 import subprocess
 
+def w(s):
+    sys.stdout.write(s + "\n")
+    sys.stdout.flush()
 def exec_commands(cmds):
     procs = []
     for i, cmd in enumerate(cmds):
@@ -18,7 +21,7 @@ def exec_commands(cmds):
         except Exception, e:
             print json.dumps((i, (1, '', str(e))))
     return procs
-print json.dumps("ready")
+w(json.dumps("ready"))
 sys.stdout.flush()
 commands = []
 while True:
@@ -36,8 +39,8 @@ while procs:
         res = p.poll()
         out = p.stdout.read()
         err = p.stderr.read()
-        print json.dumps((i, (res, out, err)))
-print json.dumps("done")
+        w(json.dumps((i, (res, out, err))))
+w(json.dumps("done"))
 """.encode("base64").replace("\n", "")
 
 CmdResult = collections.namedtuple("CmdResult", "status stdout stderr")
@@ -54,7 +57,7 @@ class SSHMaster:
     def readline_with_timeout(self, timeout):
         readable, _, _ = select.select([self.master.stdout], [], [], timeout)
         if not readable:
-            raise Exception("SSH Timeout")
+            return False
         return self.master.stdout.readline()
 
     def exec_command(self, cmd, timeout=10):
@@ -76,9 +79,11 @@ class SSHMaster:
         self.master.stdin.flush()
 
     def collect_results(self, timeout=10):
-        outputs = [None] * self.sent_commands
+        outputs = [Exception("SSH Timeout")] * self.sent_commands
         while True:
             line = self.readline_with_timeout(timeout)
+            if not line:
+                break
             resp = json.loads(line)
             if resp == "done":
                 break
