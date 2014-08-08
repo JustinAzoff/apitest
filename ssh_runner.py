@@ -10,6 +10,7 @@ import json
 import sys
 import subprocess
 import os
+import time
 
 class LineReader(object):
 
@@ -74,6 +75,8 @@ while procs:
         out = p.stdout.read()
         err = p.stderr.read()
         w(json.dumps((i, (res, out, err))))
+    if not done:
+        time.sleep(0.1)
 w(json.dumps("done"))
 """.encode("base64").replace("\n", "")
 
