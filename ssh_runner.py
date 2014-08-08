@@ -47,12 +47,19 @@ CmdResult = collections.namedtuple("CmdResult", "status stdout stderr")
 
 class SSHMaster:
     def __init__(self, host):
+        self.host = host
         self.base_cmd = [
             "ssh",
             host,
         ]
-        cmd = self.base_cmd + ["sh"]
-        self.master = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        self.need_connect = True
+
+    def connect(self):
+        if self.need_connect:
+            print "Connecting to", self.host
+            cmd = self.base_cmd + ["sh"]
+            self.master = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+            self.need_connect = False
 
     def readline_with_timeout(self, timeout):
         readable, _, _ = select.select([self.master.stdout], [], [], timeout)
@@ -68,6 +75,7 @@ class SSHMaster:
         return self.collect_results(timeout)
 
     def send_commands(self, cmds, timeout=10):
+        self.connect()
         self.sent_commands = 0
         run_mux =  """python -c 'exec("%s".decode("base64"))'\n""" % muxer
         self.master.stdin.write(run_mux)
@@ -83,6 +91,7 @@ class SSHMaster:
         while True:
             line = self.readline_with_timeout(timeout)
             if not line:
+                self.close()
                 break
             resp = json.loads(line)
             if resp == "done":
@@ -102,6 +111,7 @@ class SSHMaster:
         except OSError:
             pass
         self.master.wait()
+        self.need_connect = True
     __del__ = close
 
 class MultiMaster:
@@ -149,7 +159,6 @@ class HostHandler(Thread):
         self.q.put(STOP_RUNNING)
 
     def connect(self):
-        print "Connecting to", self.host
         if self.master:
             self.master.close()
         self.master = SSHMaster(self.host)
