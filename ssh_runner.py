@@ -40,9 +40,7 @@ def w(s):
 def readlines_with_timeout(timeout=5):
     readable, _, _ = select.select([sys.stdin], [], [], timeout)
     if not readable:
-        sys.stderr.write("not readable\n")
         return 'done\n'
-    sys.stderr.write("readable!\n")
     return reader.readlines()
 def exec_commands(cmds):
     procs = []
