@@ -193,7 +193,6 @@ class HostHandler(Thread):
     def __init__(self, host):
         self.host = host
         self.q = Queue()
-        self.oq = Queue()
         Thread.__init__(self)
         self.alive = "Unknown"
         self.master = None
@@ -224,7 +223,8 @@ class HostHandler(Thread):
             self.connect()
 
         try :
-            item = self.q.get(timeout=30)
+            r = self.q.get(timeout=30)
+            item, rq = r
         except Empty:
             self.alive = self.ping()
             return
@@ -238,21 +238,16 @@ class HostHandler(Thread):
             self.alive = False
             time.sleep(2)
             resp = [e] * len(item)
-        self.oq.put(resp)
+        rq.put(resp)
 
-    def send_commands(self, commands):
-        self.q.put(commands)
-
-    def get_result(self, timeout=None):
-        try :
-            return self.oq.get(timeout=timeout)
-        except Empty:
-            return ["Timeout"]
+    def send_commands(self, commands, rq):
+        self.q.put((commands, rq))
             
 
 class MultiMasterManager:
     def __init__(self):
         self.masters = {}
+        self.response_queues = {}
 
     def setup(self, host):
         if host not in self.masters:
@@ -261,15 +256,24 @@ class MultiMasterManager:
 
     def send_commands(self, host, commands):
         self.setup(host)
-        self.masters[host].send_commands(commands)
+        rq = Queue()
+        self.response_queues[host] = rq
+        self.masters[host].send_commands(commands, rq)
+
+    def get_result(self, host, timeout):
+        rq = self.response_queues[host]
+        try:
+            return rq.get(timeout=timeout)
+        except Empty:
+            return ["Timeout"]
 
     def exec_command(self, host, command, timeout=15):
         return self.exec_commands(host, [command], timeout)[0]
 
     def exec_commands(self, host, commands, timeout=15):
         self.setup(host)
-        self.masters[host].send_commands(commands)
-        return self.masters[host].get_result(timeout)
+        self.send_commands(host, commands)
+        return self.get_result(host, timeout)
 
     def exec_multihost_commands(self, cmds, timeout=15):
         hosts = collections.defaultdict(list)
@@ -280,7 +284,7 @@ class MultiMasterManager:
             self.send_commands(host, cmds)
 
         for host in hosts:
-            for res in self.masters[host].get_result(timeout):
+            for res in self.get_result(host, timeout):
                 yield host, res
 
     def host_status(self):
