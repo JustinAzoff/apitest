@@ -5,13 +5,45 @@ import select
 import time
 
 muxer=r"""
+import select
 import json
 import sys
 import subprocess
+import os
+
+class LineReader(object):
+
+    def __init__(self, fd):
+        self._fd = fd
+        self._buf = ''
+
+    def fileno(self):
+        return self._fd
+
+    def readlines(self):
+        data = os.read(self._fd, 4096)
+        if not data:
+            # EOF
+            return None
+        self._buf += data
+        if '\n' not in data:
+            return []
+        tmp = self._buf.split('\n')
+        lines, self._buf = tmp[:-1], tmp[-1]
+        return lines
+
+reader = LineReader(sys.stdin.fileno())
 
 def w(s):
     sys.stdout.write(s + "\n")
     sys.stdout.flush()
+def readlines_with_timeout(timeout=5):
+    readable, _, _ = select.select([sys.stdin], [], [], timeout)
+    if not readable:
+        sys.stderr.write("not readable\n")
+        return 'done\n'
+    sys.stderr.write("readable!\n")
+    return reader.readlines()
 def exec_commands(cmds):
     procs = []
     for i, cmd in enumerate(cmds):
@@ -24,10 +56,14 @@ def exec_commands(cmds):
 w(json.dumps("ready"))
 sys.stdout.flush()
 commands = []
-while True:
-    line = sys.stdin.readline()
-    if line.strip() == "done":
-        break
+done = True
+def getlines():
+    while True:
+        for line in readlines_with_timeout():
+            if line == "done":
+                return
+            yield line
+for line in getlines():
     commands.append(json.loads(line))
 procs = exec_commands(commands)
 
@@ -53,6 +89,7 @@ class SSHMaster:
             host,
         ]
         self.need_connect = True
+        self.master = None
 
     def connect(self):
         if self.need_connect:
@@ -76,15 +113,14 @@ class SSHMaster:
 
     def send_commands(self, cmds, timeout=10):
         self.connect()
-        self.sent_commands = 0
         run_mux =  """python -c 'exec("%s".decode("base64"))'\n""" % muxer
         self.master.stdin.write(run_mux)
         self.readline_with_timeout(timeout)
         for cmd in cmds:
             self.master.stdin.write(json.dumps(cmd) + "\n")
-            self.sent_commands += 1
         self.master.stdin.write("done\n")
         self.master.stdin.flush()
+        self.sent_commands = len(cmds)
 
     def collect_results(self, timeout=10):
         outputs = [Exception("SSH Timeout")] * self.sent_commands
@@ -105,12 +141,15 @@ class SSHMaster:
         return output and output.stdout.strip() == "ping"
 
     def close(self):
+        if not self.master:
+            return
         self.master.stdin.close()
         try:
             self.master.kill()
         except OSError:
             pass
         self.master.wait()
+        self.master = None
         self.need_connect = True
     __del__ = close
 
