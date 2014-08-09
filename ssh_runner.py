@@ -165,7 +165,7 @@ class HostHandler(Thread):
         self.master = None
 
     def shutdown(self):
-        self.q.put(STOP_RUNNING)
+        self.q.put((STOP_RUNNING, None))
 
     def connect(self):
         if self.master:
@@ -190,8 +190,7 @@ class HostHandler(Thread):
             self.connect()
 
         try :
-            r = self.q.get(timeout=30)
-            item, rq = r
+            item, rq = self.q.get(timeout=30)
         except Empty:
             self.alive = self.ping()
             return
