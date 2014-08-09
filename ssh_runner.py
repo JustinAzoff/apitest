@@ -193,6 +193,7 @@ class HostHandler(Thread):
         try :
             item, rq = self.q.get(timeout=30)
         except Empty:
+            self.connect_and_ping()
             return
 
         if item is STOP_RUNNING:
