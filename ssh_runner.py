@@ -57,7 +57,6 @@ def exec_commands(cmds):
 w(json.dumps("ready"))
 sys.stdout.flush()
 commands = []
-done = True
 def getlines():
     while True:
         for line in readlines_with_timeout():
