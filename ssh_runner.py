@@ -74,10 +74,10 @@ class SSHMaster:
             return False
         return self.master.stdout.readline()
 
-    def exec_command(self, cmd, timeout=10):
+    def exec_command(self, cmd, timeout=60):
         return self.exec_commands([cmd], timeout)[0]
 
-    def exec_commands(self, cmds, timeout=10):
+    def exec_commands(self, cmds, timeout=60):
         self.send_commands(cmds, timeout)
         return self.collect_results(timeout)
 
@@ -92,7 +92,7 @@ class SSHMaster:
         self.master.stdin.flush()
         self.sent_commands = len(cmds)
 
-    def collect_results(self, timeout=10):
+    def collect_results(self, timeout=60):
         outputs = [Exception("SSH Timeout")] * self.sent_commands
         while True:
             line = self.readline_with_timeout(timeout)
@@ -106,7 +106,7 @@ class SSHMaster:
             outputs[idx] = CmdResult(*out)
         return outputs
 
-    def ping(self, timeout=2):
+    def ping(self, timeout=5):
         output = self.exec_command(["/bin/echo", "ping"])
         return output and output.stdout.strip() == "ping"
 
@@ -241,15 +241,15 @@ class MultiMasterManager:
             self.shutdown(host)
             return ["Timeout"] #needs to be the right length
 
-    def exec_command(self, host, command, timeout=15):
+    def exec_command(self, host, command, timeout=30):
         return self.exec_commands(host, [command], timeout)[0]
 
-    def exec_commands(self, host, commands, timeout=15):
+    def exec_commands(self, host, commands, timeout=65):
         self.setup(host)
         self.send_commands(host, commands)
         return self.get_result(host, timeout)
 
-    def exec_multihost_commands(self, cmds, timeout=15):
+    def exec_multihost_commands(self, cmds, timeout=65):
         hosts = collections.defaultdict(list)
         for host, cmd in cmds:
             hosts[host].append(cmd)
