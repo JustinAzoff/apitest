@@ -35,7 +35,6 @@ for line in iter(sys.stdin.readline, "done\n"):
     commands.append(json.loads(line))
 procs = exec_commands(commands)
 
-start = time.time()
 while procs:
     done = [(i,p) for (i,p) in procs if p.poll() is not None]
     procs = [x for x in procs if x not in done]
