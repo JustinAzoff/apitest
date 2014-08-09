@@ -171,12 +171,6 @@ class HostHandler(Thread):
         if self.master:
             self.master.close()
         self.master = SSHMaster(self.host)
-        self.alive = self.ping()
-
-    def run(self):
-        while True:
-            if self.iteration():
-                return
 
     def ping(self):
         try :
@@ -185,18 +179,31 @@ class HostHandler(Thread):
             print "Error in ping for %s" % self.host
             return False
 
-    def iteration(self):
+    def connect_and_ping(self):
         if self.alive is not True:
             self.connect()
+        self.alive = self.ping()
 
+    def run(self):
+        while True:
+            if self.iteration():
+                return
+
+    def iteration(self):
         try :
             item, rq = self.q.get(timeout=30)
         except Empty:
-            self.alive = self.ping()
             return
 
         if item is STOP_RUNNING:
             return True
+
+        self.connect_and_ping()
+        if not self.alive:
+            resp = [Exception("SSH Timeout")] * len(item)
+            rq.put(resp)
+            return
+
         try :
             resp = self.master.exec_commands(item)
         except Exception, e:
