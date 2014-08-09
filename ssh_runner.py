@@ -11,40 +11,13 @@ import sys
 import subprocess
 import os
 import time
+import signal
 
 TIMEOUT=60
-
-class LineReader(object):
-
-    def __init__(self, fd):
-        self._fd = fd
-        self._buf = ''
-
-    def fileno(self):
-        return self._fd
-
-    def readlines(self):
-        data = os.read(self._fd, 4096)
-        if not data:
-            # EOF
-            return None
-        self._buf += data
-        if '\n' not in data:
-            return []
-        tmp = self._buf.split('\n')
-        lines, self._buf = tmp[:-1], tmp[-1]
-        return lines
-
-reader = LineReader(sys.stdin.fileno())
 
 def w(s):
     sys.stdout.write(s + "\n")
     sys.stdout.flush()
-def readlines_with_timeout(timeout=5):
-    readable, _, _ = select.select([sys.stdin], [], [], timeout)
-    if not readable:
-        return 'done\n'
-    return reader.readlines()
 def exec_commands(cmds):
     procs = []
     for i, cmd in enumerate(cmds):
@@ -57,18 +30,13 @@ def exec_commands(cmds):
 w(json.dumps("ready"))
 sys.stdout.flush()
 commands = []
-def getlines():
-    while True:
-        for line in readlines_with_timeout():
-            if line == "done":
-                return
-            yield line
-for line in getlines():
+signal.alarm(TIMEOUT)
+for line in iter(sys.stdin.readline, "done\n"):
     commands.append(json.loads(line))
 procs = exec_commands(commands)
 
 start = time.time()
-while procs and time.time() - start < TIMEOUT:
+while procs:
     done = [(i,p) for (i,p) in procs if p.poll() is not None]
     procs = [x for x in procs if x not in done]
 
