@@ -238,7 +238,8 @@ class MultiMasterManager:
         try:
             return rq.get(timeout=timeout)
         except Empty:
-            return ["Timeout"]
+            self.shutdown(host)
+            return ["Timeout"] #needs to be the right length
 
     def exec_command(self, host, command, timeout=15):
         return self.exec_commands(host, [command], timeout)[0]
@@ -264,9 +265,13 @@ class MultiMasterManager:
         for h, o in self.masters.items():
             yield h, o.alive
 
-    def shutdown(self):
+    def shutdown_host(self, host):
+        self.masters[host].shutdown()
+        del self.masters[host]
+
+    def shutdown_all(self):
         for handler in self.masters.values():
             handler.shutdown()
         self.masters = {}
 
-    __del__ = shutdown
+    __del__ = shutdown_all
