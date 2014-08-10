@@ -265,7 +265,7 @@ class MultiMasterManager:
         for h, o in self.masters.items():
             yield h, o.alive
 
-    def shutdown_host(self, host):
+    def shutdown(self, host):
         self.masters[host].shutdown()
         del self.masters[host]
 
