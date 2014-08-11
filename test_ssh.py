@@ -1,7 +1,17 @@
+import random
 import ssh_runner
 
 import time
 time.sleep(2)
+
+def sanity():
+    print "Sanity Check:"
+    for host in 'arpy', 'rp2':
+        expected = str(random.random())
+        assert m.exec_command(host, ["echo", expected]).stdout.strip() == expected
+        print "Got expected value from", host
+
+        time.sleep(5)
 
 def go(m):
     print 'uptime is', m.exec_command("arpy", ["uptime"])
@@ -22,6 +32,7 @@ def go(m):
         print
         print "Parallel:"
 
+        sanity()
 
         for res in m.exec_multihost_commands([
             ("arpy", ["uname", "-a"]),
@@ -40,14 +51,19 @@ def go(m):
         e = time.time()
         print len(cmds), "commands across 2 hosts took %.2f" % (e-s)
 
+        sanity()
+
         cmds = []
         for host in 'arpy', 'rp2':
-            for arg in range(9):
+            for arg in 1,2,3,4,20, 5:
                 cmd = "sleep %s && echo slept for %d" % (arg, arg)
                 cmds.append((host, ["/bin/sh", "-c", cmd]))
 
-        for res in m.exec_multihost_commands(cmds):
-            print res
+        results = m.exec_multihost_commands(cmds,timeout=35)
+        for cmd, res in zip(cmds, results):
+            print cmd, res
+
+        sanity()
         
         print
         print "Host status:"
@@ -55,10 +71,10 @@ def go(m):
         for x in m.host_status():
             print x
 
-        time.sleep(5)
+
 
 m = ssh_runner.MultiMasterManager()
 try :
     go(m)
 finally:
-    m.shutdown()
+    m.shutdown_all()
