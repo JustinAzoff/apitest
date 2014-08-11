@@ -5,15 +5,13 @@ import select
 import time
 
 muxer=r"""
-import select
 import json
 import sys
 import subprocess
-import os
 import time
 import signal
 
-TIMEOUT=60
+TIMEOUT=120
 
 def w(s):
     sys.stdout.write(s + "\n")
