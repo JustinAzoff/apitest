@@ -6,10 +6,12 @@ import time
 
 muxer=r"""
 import json
+import os
 import sys
 import subprocess
-import time
 import signal
+import select
+import time
 
 TIMEOUT=120
 
@@ -32,17 +34,39 @@ for line in iter(sys.stdin.readline, "done\n"):
     commands.append(json.loads(line))
 procs = exec_commands(commands)
 
-while procs:
-    done = [(i,p) for (i,p) in procs if p.poll() is not None]
-    procs = [x for x in procs if x not in done]
 
-    for i, p in done:
-        res = p.poll()
-        out = p.stdout.read()
-        err = p.stderr.read()
-        w(json.dumps((i, (res, out, err))))
-    if not done:
-        time.sleep(0.1)
+cmd_mapping = {}
+fd_mapping = {}
+allfds = set()
+for i, proc in procs:
+    o = {"idx": i, "proc": proc, "stdout": [], "stderr": [], "waiting": 2}
+    fd_mapping[proc.stdout] = o["stdout"]
+    fd_mapping[proc.stderr] = o["stderr"]
+    cmd_mapping[proc.stdout] = o
+    cmd_mapping[proc.stderr] = o
+    allfds.update([proc.stderr, proc.stdout])
+
+while allfds:
+    r, _, _ = select.select(allfds, [], [])
+    for fd in r:
+        output = os.read(fd.fileno(), 1024)
+        if output != "":
+            fd_mapping[fd].append(output)
+            continue
+
+        cmd = cmd_mapping[fd]
+        cmd["waiting"] -=1
+        if cmd["waiting"] != 0:
+            continue
+
+        proc = cmd["proc"]
+        res = proc.poll()
+        out = "".join(cmd["stdout"])
+        err = "".join(cmd["stderr"])
+        w(json.dumps((cmd["idx"], (res, out, err))))
+        allfds.remove(proc.stdout)
+        allfds.remove(proc.stderr)
+
 w(json.dumps("done"))
 """.encode("base64").replace("\n", "")
 
