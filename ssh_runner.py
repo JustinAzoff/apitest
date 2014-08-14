@@ -15,6 +15,8 @@ import time
 
 TIMEOUT=120
 
+import socket
+
 def w(s):
     sys.stdout.write(s + "\n")
     sys.stdout.flush()
@@ -84,9 +86,8 @@ class SSHMaster:
 
     def connect(self):
         if self.need_connect:
-            print "Connecting to", self.host
             cmd = self.base_cmd + ["sh"]
-            self.master = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+            self.master = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE, close_fds=True)
             self.need_connect = False
 
     def readline_with_timeout(self, timeout):
@@ -181,9 +182,9 @@ class HostHandler(Thread):
     def __init__(self, host):
         self.host = host
         self.q = Queue()
-        Thread.__init__(self)
         self.alive = "Unknown"
         self.master = None
+        Thread.__init__(self)
 
     def shutdown(self):
         self.q.put((STOP_RUNNING, None))
