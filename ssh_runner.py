@@ -26,7 +26,6 @@ def exec_commands(cmds):
             print json.dumps((i, (1, '', str(e))))
     return procs
 w(json.dumps("ready"))
-sys.stdout.flush()
 commands = []
 signal.alarm(TIMEOUT)
 for line in iter(sys.stdin.readline, "done\n"):
