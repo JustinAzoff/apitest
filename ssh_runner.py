@@ -82,6 +82,7 @@ class SSHMaster:
         self.connect()
         run_mux =  """python -c 'exec("%s".decode("base64"))'\n""" % muxer
         self.master.stdin.write(run_mux)
+        self.master.stdin.flush()
         self.readline_with_timeout(timeout)
         for cmd in cmds:
             self.master.stdin.write(json.dumps(cmd) + "\n")
