@@ -19,13 +19,15 @@ runner_cmds.sort()
 
 def current():
     for res in execute.executeCmdsParallel(bro_cmds):
-        print res
+        pass
+        #print res
 
 m = ssh_runner.MultiMasterManager()
 
 def new():
-    for res in m.exec_multihost_commands(runner_cmds, timeout=4):
-        print res
+    for res in m.exec_multihost_commands(runner_cmds, timeout=15):
+        pass
+        #print res
     
 
 def t(f, c):
@@ -34,11 +36,8 @@ def t(f, c):
     e = time.time()
     print "%s took %0.2f seconds" % (c, e-s)
 
-
-t(current, "old first run")
-t(current, "old second run")
-
-t(new, "new first run")
-t(new, "new second run")
+for label, func in ("old", current), ("new", new):
+    for x in range(5):
+        t(func, "%s run %d" % (label, x))
 
 del m
