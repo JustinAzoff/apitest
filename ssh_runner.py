@@ -68,7 +68,7 @@ while allfds:
         allfds.remove(proc.stderr)
 
 w(json.dumps("done"))
-""".encode("base64").replace("\n", "")
+""".encode("zlib").encode("base64").replace("\n", "")
 
 CmdResult = collections.namedtuple("CmdResult", "status stdout stderr")
 
@@ -104,7 +104,7 @@ class SSHMaster:
 
     def send_commands(self, cmds, timeout=10):
         self.connect()
-        run_mux =  """python -c 'exec("%s".decode("base64"))'\n""" % muxer
+        run_mux =  """python -c 'exec("%s".decode("base64").decode("zlib"))'\n""" % muxer
         self.master.stdin.write(run_mux)
         self.master.stdin.flush()
         self.readline_with_timeout(timeout)
