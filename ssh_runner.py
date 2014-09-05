@@ -62,7 +62,7 @@ while allfds:
             continue
 
         proc = cmd["proc"]
-        res = proc.poll()
+        res = proc.wait()
         out = "".join(cmd["stdout"])
         err = "".join(cmd["stderr"])
         w(json.dumps((cmd["idx"], (res, out, err))))
